@@ -16,20 +16,21 @@ class AnimatedBackground(Screen):
     def __init__(self, **kwargs):
         super(AnimatedBackground, self).__init__(**kwargs)
         with self.canvas.before:
-            self.color = Color(1, 0, 0, 1)  # Initial color red
+            # Initial color red
+            self.color_instruction = Color(1, 0, 0, 1)  
             self.rect = Rectangle(size=Window.size)
 
         # Animate background color
         self.animate_background()
 
     def animate_background(self):
-        # Create an animation sequence to change the color
-        anim = Animation(color=(0, 1, 0, 1), duration=2) + \
-               Animation(color=(0, 0, 1, 1), duration=2) + \
-               Animation(color=(1, 1, 0, 1), duration=2) + \
-               Animation(color=(1, 0, 1, 1), duration=2)
+        # Animate the rgba property of the color instruction
+        anim = Animation(rgba=(0, 1, 0, 1), duration=4) + \
+               Animation(rgba=(0, 0, 1, 1), duration=4) + \
+               Animation(rgba=(1, 1, 0, 1), duration=4) + \
+               Animation(rgba=(1, 0, 1, 1), duration=4)
         anim.repeat = True
-        anim.start(self.color)
+        anim.start(self.color_instruction)
 
 
 class ScreensaverScreen(Screen):
@@ -39,8 +40,13 @@ class ScreensaverScreen(Screen):
         self.add_widget(self.animated_background)
 
         # Then add your screensaver image on top
-        self.screensaver_image = Image(source='your_screensaver_image.png', allow_stretch=True)
-        self.screensaver_image.size = Window.size
+        self.screensaver_image = Image(
+            source='screensaver.png',
+            allow_stretch=True,  # Allow the image to be scaled
+            keep_ratio=True,  # Keep the image's aspect ratio
+            size_hint=(1, 1),  # The image will fill its parent
+        )
+        self.screensaver_image.pos_hint = {'center_x': 0.5, 'center_y': 0.557}
         self.add_widget(self.screensaver_image)
 
         super(ScreensaverScreen, self).on_enter(*args)
