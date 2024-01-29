@@ -86,8 +86,9 @@ class CustomScrollView(ScrollView):
 class DrinkSelectionScreen(Screen):
     def __init__(self, **kwargs):
         super(DrinkSelectionScreen, self).__init__(**kwargs)
-        self.layout = GridLayout(cols=2, spacing=10, size_hint_y=None)
-        self.layout.bind(minimum_height=self.layout.setter('height'))
+        # Adjust the GridLayout for horizontal orientation
+        self.layout = GridLayout(rows=1, spacing=10, size_hint_x=None)
+        self.layout.bind(minimum_width=self.layout.setter('width'))
 
         drinks = {
             "Rum & Coke": "icons/rumcoke.png",
@@ -99,17 +100,21 @@ class DrinkSelectionScreen(Screen):
         }
 
         for drink, img_path in drinks.items():
-            btn = ImageButton(source=img_path, size_hint_y=None, height=150)
+            # Set the width of the buttons based on the number of drinks
+            btn_width = Window.width / 2.5  # Adjust this to change the button width
+            btn = ImageButton(source=img_path, size_hint=(None, None), size=(btn_width, btn_width), allow_stretch=True)
             btn.id = drink
             btn.bind(on_release=self.select_drink)
             self.layout.add_widget(btn)
 
-        scroll_view = CustomScrollView(size_hint=(1, None), size=(Window.width, Window.height))
+        # Adjust the ScrollView for horizontal scrolling
+        scroll_view = CustomScrollView(size_hint=(None, 1), size=(Window.width, Window.height), do_scroll_x=True, do_scroll_y=False)
         scroll_view.add_widget(self.layout)
         self.add_widget(scroll_view)
 
     def select_drink(self, instance):
         print(f"{instance.id} selected")
+
 
 class CocktailMakerApp(App):
     def build(self):
