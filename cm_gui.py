@@ -9,16 +9,16 @@ from kivy.config import Config
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 
+
 # Configure the app to full screen, suitable for a 5-inch display
 Config.set('graphics', 'fullscreen', 'auto')
 
 class AnimatedBackground(Screen):
     def __init__(self, **kwargs):
-        super(AnimatedBackground, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         with self.canvas.before:
             self.color_instruction = Color(1, 0, 0, 1)
             self.rect = Rectangle(size=Window.size)
-
         self.animate_background()
 
     def animate_background(self):
@@ -43,53 +43,32 @@ class ScreensaverScreen(Screen):
         self.screensaver_image.pos_hint = {'center_x': 0.5, 'center_y': 0.557}
         self.add_widget(self.screensaver_image)
 
-        super(ScreensaverScreen, self).on_enter(*args)
-
     def on_touch_down(self, touch):
-        App.get_running_app().sm.current = 'drink_selection'
+        self.manager.current = 'drink_selection'
         return super().on_touch_down(touch)
 
 class ImageButton(ButtonBehavior, Image):
     def __init__(self, **kwargs):
-        super(ImageButton, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.always_release = True
-        self.default_opacity = self.opacity
 
     def on_press(self):
-        self.opacity = 0.7
+        self.opacity *= 0.7
 
     def on_release(self):
-        self.opacity = self.default_opacity
-
-class CustomScrollView(ScrollView):
-    def on_touch_down(self, touch):
-        if self.collide_point(*touch.pos):
-            touch.ud['is_scroll'] = False
-            return super(CustomScrollView, self).on_touch_down(touch)
-        return False
-
-    def on_touch_move(self, touch):
-        if self.collide_point(*touch.pos):
-            touch.ud['is_scroll'] = True
-            return super(CustomScrollView, self).on_touch_move(touch)
-        return False
-
-    def on_touch_up(self, touch):
-        if self.collide_point(*touch.pos) and touch.ud.get('is_scroll'):
-            return super(CustomScrollView, self).on_touch_up(touch)
-        elif self.collide_point(*touch.pos):
-            for child in self.children:
-                if child.dispatch('on_touch_up', touch):
-                    break
-        return False
+        self.opacity = 1
 
 class DrinkSelectionScreen(Screen):
     def __init__(self, **kwargs):
-        super(DrinkSelectionScreen, self).__init__(**kwargs)
-        # Adjust the GridLayout for horizontal orientation
-        self.layout = GridLayout(rows=1, spacing=10, size_hint_x=None)
+        super().__init__(**kwargs)
+        # Load the background image
+        with self.canvas.before:
+            self.bg = Rectangle(source='drinkbg.png', size=Window.size)   
+
+        self.layout = GridLayout(rows=1, spacing=30, size_hint_x=None, padding=(30, 100, 30, 30))
         self.layout.bind(minimum_width=self.layout.setter('width'))
 
+        
         drinks = {
             "Rum & Coke": "icons/rumcoke.png",
             "Vodka Cranberry": "icons/vodkacran.png",
@@ -99,29 +78,25 @@ class DrinkSelectionScreen(Screen):
             "Cranberry Rum": "icons/cranbrum.png"
         }
 
+        btn_width = Window.width / 2.5
         for drink, img_path in drinks.items():
-            # Set the width of the buttons based on the number of drinks
-            btn_width = Window.width / 2.5  # Adjust this to change the button width
             btn = ImageButton(source=img_path, size_hint=(None, None), size=(btn_width, btn_width), allow_stretch=True)
-            btn.id = drink
-            btn.bind(on_release=self.select_drink)
+            btn.bind(on_release=lambda btn, drink_name=drink: self.select_drink(drink_name))
             self.layout.add_widget(btn)
 
-        # Adjust the ScrollView for horizontal scrolling
-        scroll_view = CustomScrollView(size_hint=(None, 1), size=(Window.width, Window.height), do_scroll_x=True, do_scroll_y=False)
+        scroll_view = ScrollView(size_hint=(None, None), size=(Window.width, Window.height), do_scroll_x=True, do_scroll_y=False)
         scroll_view.add_widget(self.layout)
         self.add_widget(scroll_view)
 
-    def select_drink(self, instance):
-        print(f"{instance.id} selected")
-
+    def select_drink(self, drink_name):
+        print(f"{drink_name} selected")
 
 class CocktailMakerApp(App):
     def build(self):
-        self.sm = ScreenManager()
-        self.sm.add_widget(ScreensaverScreen(name='screensaver'))
-        self.sm.add_widget(DrinkSelectionScreen(name='drink_selection'))
-        return self.sm
+        sm = ScreenManager()
+        sm.add_widget(ScreensaverScreen(name='screensaver'))
+        sm.add_widget(DrinkSelectionScreen(name='drink_selection'))
+        return sm
 
 if __name__ == '__main__':
     CocktailMakerApp().run()
