@@ -2,14 +2,17 @@ from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.scrollview import ScrollView
 from kivy.animation import Animation
 from kivy.uix.image import Image
+from kivy.uix.behaviors import ButtonBehavior   
 from kivy.config import Config
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 
 # Configure the app to full screen, suitable for a 5-inch display
 Config.set('graphics', 'fullscreen', 'auto')
+
 
 
 class AnimatedBackground(Screen):
@@ -54,23 +57,62 @@ class ScreensaverScreen(Screen):
     def on_touch_down(self, touch):
         app.sm.current = 'drink_selection'
         return super().on_touch_down(touch)
+    
+class ImageButton(ButtonBehavior, Image):
+    def __init__(self, **kwargs):
+        super(ImageButton, self).__init__(**kwargs)
+        self.always_release = True
+        self.default_opacity = self.opacity
+
+    def on_press(self):
+        # Reduce opacity to 70% when pressed
+        self.opacity = 0.7
+
+    def on_release(self):
+        # Return to original opacity
+        self.opacity = self.default_opacity
 
 
 class DrinkSelectionScreen(Screen):
     def __init__(self, **kwargs):
         super(DrinkSelectionScreen, self).__init__(**kwargs)
-        layout = GridLayout(cols=2, padding=10, spacing=10)
+        # Create a GridLayout within a ScrollView
+        self.layout = GridLayout(cols=2, spacing=10, size_hint_y=None)
+        self.layout.bind(minimum_height=self.layout.setter('height'))
 
-        # Add buttons for each drink
-        for drink in ["Rum & Coke", "Vodka Cranberry", "Whiskey Iced Tea",
-                      "Vodka Iced Tea", "Rum Cranberry", "Whiskey & Coke"]:
-            btn = Button(text=drink, on_press=self.select_drink)
-            layout.add_widget(btn)
+        # Dictionary of drinks and their corresponding image paths
+        drinks = {
+            "Rum & Coke": "icons/rumcoke.png",
+            "Vodka Cranberry": "icons/vodkacran.png",
+            "Whiskey Iced Tea": "icons/wit.png",
+            "Vodka Iced Tea": "icons/vit.png",
+            "Whiskey & Coke": "icons/whiskeycoke.png",
+            "Cranberry Rum": "icons/cranbrum.png"
+        }
 
-        self.add_widget(layout)
+        # Add image buttons for each drink
+        for drink, img_path in drinks.items():
+            btn = ImageButton(source=img_path, size_hint_y=None, height=150)
+            btn.id = drink
+            btn.bind(on_release=lambda btn: self.select_drink(btn))
+            self.layout.add_widget(btn)
+
+        # Create the scroll view and add the layout to it
+        scroll_view = ScrollView(size_hint=(1, None), size=(Window.width, Window.height))
+        scroll_view.add_widget(self.layout)
+        self.add_widget(scroll_view)
+
+    def button_press(self, instance):
+        instance.opacity = 0.7  # Dim the button
+
+    def button_release(self, instance):
+        instance.opacity = 1  # Return to full opacity
+        self.select_drink(instance)
 
     def select_drink(self, instance):
-        print(f"{instance.text} selected")  # Replace with GPIO control logic
+        print(f"{instance.id} selected")  # Print the selected drink's name
+
+    
 
 
 
