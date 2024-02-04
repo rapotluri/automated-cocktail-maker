@@ -91,8 +91,8 @@ class ConfirmPopup(Popup):
         message = Label(text=f'Prepare {self.drink_name}?')
         btn_layout = BoxLayout(size_hint_y=None, height='50dp')
         
-        accept_btn = Button(text='Yes', on_release=self._on_accept)
-        decline_btn = Button(text='No', on_release=self.dismiss)
+        accept_btn = Button(text='Accept', on_release=self._on_accept)
+        decline_btn = Button(text='Decline', on_release=self.dismiss)
         
         btn_layout.add_widget(accept_btn)
         btn_layout.add_widget(decline_btn)
@@ -189,38 +189,6 @@ class DrinkSelectionScreen(Screen):
         # Proceed to the next step
         Clock.schedule_once(self.next_step, 0.5)  # Add a small delay before the next step
 
-
-
-# class ConfirmPopup(Popup):
-#     def __init__(self, drink_name, **kwargs):
-#         super().__init__(**kwargs)
-#         self.size_hint = (0.8, 0.5)
-#         self.title = 'Confirm Drink Selection'
-#         self.drink_name = drink_name
-        
-#         content = BoxLayout(orientation='vertical', padding=10, spacing=10)
-#         message = Label(text=f'Would you like to prepare {self.drink_name}?')
-#         button_layout = BoxLayout(height=50, size_hint_y=None)
-        
-#         accept_button = Button(text='Accept', on_release=self.accept)
-#         decline_button = Button(text='Decline', on_release=self.dismiss_popup)
-        
-#         button_layout.add_widget(accept_button)
-#         button_layout.add_widget(decline_button)
-        
-#         content.add_widget(message)
-#         content.add_widget(button_layout)
-        
-#         self.content = content
-
-#     def accept(self, instance):
-#         # Proceed with preparing the drink
-#         self.dismiss()
-#         App.get_running_app().root.get_screen('drink_selection').proceed_with_drink(self.drink_name)
-
-#     def dismiss_popup(self, instance):
-#         # Dismiss the popup
-#         self.dismiss()
 
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
