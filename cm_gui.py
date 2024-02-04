@@ -13,6 +13,22 @@ from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+import RPi.GPIO as GPIO
+import threading
+
+GPIO.setmode(GPIO.BCM)
+beverage_to_motor_map = {
+    "Rum": 2,
+    "Coke": 3,
+    "Vodka": 4,
+    "Cranberry": 17,
+    "Whiskey": 27,
+    "Iced Tea": 22
+}
+for pin in beverage_to_motor_map.values():
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin, GPIO.HIGH)  # Assuming HIGH signal deactivates relay
+
 
 
 # Configure the app to full screen, suitable for a 5-inch display
@@ -63,6 +79,33 @@ class ImageButton(ButtonBehavior, Image):
     def on_release(self):
         self.opacity = 1
 
+class ConfirmPopup(Popup):
+    def __init__(self, drink_name, on_confirm, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = (0.8, 0.4)
+        self.title = f'Confirm {drink_name}'
+        self.drink_name = drink_name
+        self.on_confirm = on_confirm
+
+        content = BoxLayout(orientation='vertical')
+        message = Label(text=f'Prepare {self.drink_name}?')
+        btn_layout = BoxLayout(size_hint_y=None, height='50dp')
+        
+        accept_btn = Button(text='Yes', on_release=self._on_accept)
+        decline_btn = Button(text='No', on_release=self.dismiss)
+        
+        btn_layout.add_widget(accept_btn)
+        btn_layout.add_widget(decline_btn)
+        
+        content.add_widget(message)
+        content.add_widget(btn_layout)
+        
+        self.content = content
+
+    def _on_accept(self, instance):
+        self.dismiss()
+        self.on_confirm()
+
 class DrinkSelectionScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -82,6 +125,7 @@ class DrinkSelectionScreen(Screen):
             "Whiskey & Coke": "icons/whiskeycoke.png",
             "Cranberry Rum": "icons/cranbrum.png"
         }
+        
 
         btn_width = Window.width / 2.5
         for drink, img_path in drinks.items():
@@ -93,93 +137,119 @@ class DrinkSelectionScreen(Screen):
         scroll_view.add_widget(self.layout)
         self.add_widget(scroll_view)
 
+
+    drinks_recipe = {
+        "Rum & Coke": {"Rum": 5, "Coke": 10},
+        "Vodka Cranberry": {"Vodka": 5, "Cranberry": 5},
+        "Whiskey Iced Tea": {"Whiskey": 5, "Iced Tea": 10},
+    }
+    
+
     def on_touch_down(self, touch):
         App.get_running_app().reset_inactivity_timer()
         return super().on_touch_down(touch)
+    
 
     def select_drink(self, drink_name):
-        # Open the confirmation popup
-        popup = ConfirmPopup(drink_name)
+        def on_confirm():
+            # Calculate total duration for the loading animation
+            total_duration = sum(self.drinks_recipe[drink_name].values())
+            # Show loading screen immediately with the correct duration
+            App.get_running_app().show_loading_screen(total_duration)
+            # Start preparing the drink in a separate thread
+            threading.Thread(target=self.prepare_drink, args=(drink_name,)).start()
+
+        popup = ConfirmPopup(drink_name, on_confirm)
         popup.open()
     
-    def proceed_with_drink(self, drink_name):
-        # User has accepted the confirmation, switch to the loading screen
-        print(f"Preparing {drink_name}...")
-        self.manager.current = 'loading'
+    def prepare_drink(self, drink_name):
+        self.preparation_steps = self.calculate_preparation_steps(drink_name)
+        self.next_step()
 
-class ConfirmPopup(Popup):
-    def __init__(self, drink_name, **kwargs):
-        super().__init__(**kwargs)
-        self.size_hint = (0.8, 0.5)
-        self.title = 'Confirm Drink Selection'
-        self.drink_name = drink_name
-        
-        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        message = Label(text=f'Would you like to prepare {self.drink_name}?')
-        button_layout = BoxLayout(height=50, size_hint_y=None)
-        
-        accept_button = Button(text='Accept', on_release=self.accept)
-        decline_button = Button(text='Decline', on_release=self.dismiss_popup)
-        
-        button_layout.add_widget(accept_button)
-        button_layout.add_widget(decline_button)
-        
-        content.add_widget(message)
-        content.add_widget(button_layout)
-        
-        self.content = content
+    def calculate_preparation_steps(self, drink_name):
+        recipe = self.drinks_recipe[drink_name]
+        steps = []
+        for beverage, duration in recipe.items():
+            motor_pin = beverage_to_motor_map[beverage]
+            steps.append((motor_pin, duration))
+        return steps
 
-    def accept(self, instance):
-        # Proceed with preparing the drink
-        self.dismiss()
-        App.get_running_app().root.get_screen('drink_selection').proceed_with_drink(self.drink_name)
+    def next_step(self, dt=None):
+        if self.preparation_steps:
+            motor_pin, duration = self.preparation_steps.pop(0)
+            GPIO.output(motor_pin, GPIO.LOW)  # Start motor
+            # Schedule the motor to stop after the duration
+            Clock.schedule_once(lambda dt: self.stop_motor(motor_pin), duration)
+        else:
+            # All steps are done, finish preparation
+            Clock.schedule_once(lambda dt: App.get_running_app().finish_drink_preparation(), 0)
 
-    def dismiss_popup(self, instance):
-        # Dismiss the popup
-        self.dismiss()
+    def stop_motor(self, motor_pin):
+        GPIO.output(motor_pin, GPIO.HIGH)  # Stop motor
+        # Proceed to the next step
+        Clock.schedule_once(self.next_step, 0.5)  # Add a small delay before the next step
+
+
+
+# class ConfirmPopup(Popup):
+#     def __init__(self, drink_name, **kwargs):
+#         super().__init__(**kwargs)
+#         self.size_hint = (0.8, 0.5)
+#         self.title = 'Confirm Drink Selection'
+#         self.drink_name = drink_name
+        
+#         content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+#         message = Label(text=f'Would you like to prepare {self.drink_name}?')
+#         button_layout = BoxLayout(height=50, size_hint_y=None)
+        
+#         accept_button = Button(text='Accept', on_release=self.accept)
+#         decline_button = Button(text='Decline', on_release=self.dismiss_popup)
+        
+#         button_layout.add_widget(accept_button)
+#         button_layout.add_widget(decline_button)
+        
+#         content.add_widget(message)
+#         content.add_widget(button_layout)
+        
+#         self.content = content
+
+#     def accept(self, instance):
+#         # Proceed with preparing the drink
+#         self.dismiss()
+#         App.get_running_app().root.get_screen('drink_selection').proceed_with_drink(self.drink_name)
+
+#     def dismiss_popup(self, instance):
+#         # Dismiss the popup
+#         self.dismiss()
 
 class LoadingScreen(Screen):
     def __init__(self, **kwargs):
         super(LoadingScreen, self).__init__(**kwargs)
-
-        # Draw the loading bar first so it's behind the background image
         with self.canvas.before:
-            self.color_instruction = Color(0, 1, 0, 1)  # Green color for the loading bar
-            self.loading_bar = Rectangle(size=(0, 500), pos=(self.x, 20))
-
-        # Then draw the background image on top of the loading bar
-        with self.canvas.before:
-            # Reset the color to white for the background image
+            # Setup the loading bar with explicit dimensions and position
+            self.color_instruction = Color(0, 1, 0, 1)  # Green for the loading bar
+            # Adjust the position and size below as needed for your 5-inch display
+            self.loading_bar_position = (150, 130)  # Example position
+            self.loading_bar_height = 100  # Example height
+            self.loading_bar_width = Window.width - 295  # Example width, adjust as needed
+            self.loading_bar = Rectangle(pos=self.loading_bar_position, size=(0, self.loading_bar_height))
+            
+            # Background image
             Color(1, 1, 1, 1)
-            self.bg = Rectangle(source='loading.png', size=Window.size)
+            self.bg = Rectangle(source='loading.png', size=Window.size, pos=self.pos)
 
-        # Animate the loading bar on entering the screen
-        self.bind(size=self.update_bg, pos=self.update_bg)
-
-    def update_bg(self, *args):
-        self.bg.size = self.size
-        self.bg.pos = self.pos
-        # Update the loading bar's position as well
-        self.loading_bar.pos = (self.x, 20)
-
-    def animate_background(self):
-        # Start the animation with the width of the loading bar being zero
-        self.loading_bar.size = (0, 500)
-        # Animate the width of the loading bar to match the width of the window
-        anim = Animation(size=(Window.width, 500), duration=10)
+    def start_loading_animation(self, duration):
+        # Start with a width of 0 and animate to the full width
+        self.loading_bar.size = (0, self.loading_bar_height)
+        anim = Animation(size=(self.loading_bar_width, self.loading_bar_height), duration=(duration))
         anim.start(self.loading_bar)
 
-    def on_enter(self, *args):
-        self.animate_background()
-        # After 5 seconds, simulate the drink being ready
-        Clock.schedule_once(lambda dt: self.finished_loading(), 10)
+    def update_bg(self, *args):
+        # Keep the background image fitting the screen
+        self.bg.size = self.size
+        self.bg.pos = self.pos
+        # The loading bar's position and size are fixed, so no need to update them here
 
-    def finished_loading(self, *args):
-        self.manager.current = 'screensaver'
-
-    def on_leave(self, *args):
-        # Reset the loading bar size when leaving the screen
-        self.loading_bar.size = (0, 50)
 
 
 
@@ -193,6 +263,17 @@ class CocktailMakerApp(App):
         self.sm.add_widget(LoadingScreen(name='loading'))  # Ensure this line is present
         self.reset_inactivity_timer()  # Start the inactivity timer
         return self.sm
+    
+    def show_loading_screen(self, duration):
+        if self.sm.current != 'loading':
+            self.sm.current = 'loading'
+            loading_screen = self.sm.get_screen('loading')
+            loading_screen.start_loading_animation(duration)
+
+    def finish_drink_preparation(self):
+        # Check if we need to transition back to the screensaver
+        if self.sm.current == 'loading':
+            self.sm.current = 'screensaver'
 
     def reset_inactivity_timer(self):
         # Reset the inactivity timer
