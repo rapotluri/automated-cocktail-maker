@@ -18,12 +18,13 @@ import threading
 
 GPIO.setmode(GPIO.BCM)
 beverage_to_motor_map = {
-    "Rum": 2,
-    "Coke": 3,
-    "Vodka": 4,
+    "Rum": 9,
+    "Coke": 27,
+    "Vodka": 2,
     "Cranberry": 17,
-    "Whiskey": 27,
-    "Iced Tea": 22
+    "Whiskey": 3,
+    "Iced Tea": 4,
+    "Sprite": 22
 }
 for pin in beverage_to_motor_map.values():
     GPIO.setup(pin, GPIO.OUT)
@@ -123,7 +124,8 @@ class DrinkSelectionScreen(Screen):
             "Whiskey Iced Tea": "icons/wit.png",
             "Vodka Iced Tea": "icons/vit.png",
             "Whiskey & Coke": "icons/whiskeycoke.png",
-            "Cranberry Rum": "icons/cranbrum.png"
+            "Cranberry Rum": "icons/cranbrum.png",
+            "Vodka Soda": "icons/vs.png"
         }
         
 
@@ -139,9 +141,13 @@ class DrinkSelectionScreen(Screen):
 
 
     drinks_recipe = {
-        "Rum & Coke": {"Rum": 5, "Coke": 10},
-        "Vodka Cranberry": {"Vodka": 5, "Cranberry": 5},
-        "Whiskey Iced Tea": {"Whiskey": 5, "Iced Tea": 10},
+        "Rum & Coke": {"Rum": 20, "Coke": 60},
+        "Vodka Cranberry": {"Vodka": 20, "Cranberry": 60},
+        "Whiskey Iced Tea": {"Whiskey": 30, "Iced Tea": 80},
+        "Vodka Iced Tea": {"Vodka": 20, "Iced Tea": 60},
+        "Whiskey & Coke": {"Whiskey": 20, "Coke": 60},
+        "Cranberry Rum": {"Rum": 20, "Cranberry": 60},
+        "Vodka Soda": {"Vodka": 20, "Sprite": 60}
     }
     
 
