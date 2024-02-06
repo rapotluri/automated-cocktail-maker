@@ -28,7 +28,7 @@ beverage_to_motor_map = {
 }
 for pin in beverage_to_motor_map.values():
     GPIO.setup(pin, GPIO.OUT)
-    GPIO.output(pin, GPIO.HIGH)  # Assuming HIGH signal deactivates relay
+    GPIO.output(pin, GPIO.HIGH)  # HIGH signal deactivates relay
 
 
 
@@ -143,12 +143,17 @@ class DrinkSelectionScreen(Screen):
     drinks_recipe = {
         "Rum & Coke": {"Rum": 20, "Coke": 60},
         "Vodka Cranberry": {"Vodka": 20, "Cranberry": 60},
-        "Whiskey Iced Tea": {"Whiskey": 30, "Iced Tea": 80},
+        "Whiskey Iced Tea": {"Whiskey": 20, "Iced Tea": 60},
         "Vodka Iced Tea": {"Vodka": 20, "Iced Tea": 60},
         "Whiskey & Coke": {"Whiskey": 20, "Coke": 60},
         "Cranberry Rum": {"Rum": 20, "Cranberry": 60},
         "Vodka Soda": {"Vodka": 20, "Sprite": 60}
     }
+
+    def on_enter(self, *args):
+        super(DrinkSelectionScreen, self).on_enter(*args)
+        # Reset the inactivity timer every time the drink selection screen is entered
+        App.get_running_app().reset_inactivity_timer()
     
 
     def on_touch_down(self, touch):
@@ -158,42 +163,37 @@ class DrinkSelectionScreen(Screen):
 
     def select_drink(self, drink_name):
         def on_confirm():
-            # Calculate total duration for the loading animation
-            total_duration = sum(self.drinks_recipe[drink_name].values())
-            # Show loading screen immediately with the correct duration
-            App.get_running_app().show_loading_screen(total_duration)
+            # Calculate total duration for the loading animation based on the recipe
+            total_duration = max(self.drinks_recipe[drink_name].values())
             # Start preparing the drink in a separate thread
-            threading.Thread(target=self.prepare_drink, args=(drink_name,)).start()
+            threading.Thread(target=self.prepare_drink, args=(drink_name, total_duration)).start()
 
+        # Show confirmation popup
         popup = ConfirmPopup(drink_name, on_confirm)
         popup.open()
-    
-    def prepare_drink(self, drink_name):
-        self.preparation_steps = self.calculate_preparation_steps(drink_name)
-        self.next_step()
 
-    def calculate_preparation_steps(self, drink_name):
+    def prepare_drink(self, drink_name, total_duration):
+        # Ensure GPIO operations are handled in the main thread if needed
         recipe = self.drinks_recipe[drink_name]
-        steps = []
+
+        # Start all motors for the drink simultaneously
+        for beverage, _ in recipe.items():
+            motor_pin = beverage_to_motor_map[beverage]
+            GPIO.output(motor_pin, GPIO.LOW)  # Start motor
+        
+        # Show loading screen with the total duration
+        Clock.schedule_once(lambda dt: App.get_running_app().show_loading_screen(total_duration), 0)
+
+        # Schedule all motors to stop after their respective durations
         for beverage, duration in recipe.items():
             motor_pin = beverage_to_motor_map[beverage]
-            steps.append((motor_pin, duration))
-        return steps
-
-    def next_step(self, dt=None):
-        if self.preparation_steps:
-            motor_pin, duration = self.preparation_steps.pop(0)
-            GPIO.output(motor_pin, GPIO.LOW)  # Start motor
-            # Schedule the motor to stop after the duration
-            Clock.schedule_once(lambda dt: self.stop_motor(motor_pin), duration)
-        else:
-            # All steps are done, finish preparation
-            Clock.schedule_once(lambda dt: App.get_running_app().finish_drink_preparation(), 0)
+            Clock.schedule_once(lambda dt, pin=motor_pin: self.stop_motor(pin), duration)
 
     def stop_motor(self, motor_pin):
-        GPIO.output(motor_pin, GPIO.HIGH)  # Stop motor
-        # Proceed to the next step
-        Clock.schedule_once(self.next_step, 0.5)  # Add a small delay before the next step
+        # This function will be called to stop each motor after its duration
+        GPIO.output(motor_pin, GPIO.HIGH)  # Stop the motor
+
+    
 
 
 class LoadingScreen(Screen):
@@ -229,6 +229,7 @@ class LoadingScreen(Screen):
 
 class CocktailMakerApp(App):
     inactivity_time = 30  # Inactivity timeout in seconds
+    inactivity_event = None
 
     def build(self):
         self.sm = ScreenManager()
@@ -239,10 +240,16 @@ class CocktailMakerApp(App):
         return self.sm
     
     def show_loading_screen(self, duration):
+        # Ensure we're pausing the inactivity timer when loading starts
+        Clock.schedule_once(lambda dt: self.pause_inactivity_timer(), 0)
+
         if self.sm.current != 'loading':
             self.sm.current = 'loading'
             loading_screen = self.sm.get_screen('loading')
             loading_screen.start_loading_animation(duration)
+            # Ensure we're resuming the inactivity timer after loading completes
+            Clock.schedule_once(lambda dt: self.reset_inactivity_timer(), duration)
+
 
     def finish_drink_preparation(self):
         # Check if we need to transition back to the screensaver
@@ -250,10 +257,18 @@ class CocktailMakerApp(App):
             self.sm.current = 'screensaver'
 
     def reset_inactivity_timer(self):
-        # Reset the inactivity timer
-        self.last_activity = Clock.get_boottime()
-        Clock.unschedule(self.go_to_screensaver)
-        Clock.schedule_once(self.go_to_screensaver, self.inactivity_time)
+        # Cancel any existing inactivity event
+        if self.inactivity_event:
+            self.inactivity_event.cancel()
+        # Schedule a new inactivity event
+        self.inactivity_event = Clock.schedule_once(self.go_to_screensaver, self.inactivity_time)
+
+    def pause_inactivity_timer(self):
+            # Cancel any existing inactivity event without rescheduling
+            if self.inactivity_event:
+                self.inactivity_event.cancel()
+            self.inactivity_event = None
+
 
     def on_touch_down(self, touch):
         # Whenever there's a touch down event, reset the inactivity timer
