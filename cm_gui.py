@@ -164,7 +164,7 @@ class DrinkSelectionScreen(Screen):
     def select_drink(self, drink_name):
         def on_confirm():
             # Calculate total duration for the loading animation based on the recipe
-            total_duration = max(self.drinks_recipe[drink_name].values())
+            total_duration = (max(self.drinks_recipe[drink_name].values()) - 3)
             # Start preparing the drink in a separate thread
             threading.Thread(target=self.prepare_drink, args=(drink_name, total_duration)).start()
 
